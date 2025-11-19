@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=surrol-train
-#SBATCH --partition=cscc-gpu-p
+#SBATCH -p cscc-gpu-p
 #SBATCH --qos=gpu-debug-qos
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:4
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=32
-#SBATCH --mem=220G
+#SBATCH --mem=80G
 #SBATCH --time=03:00:00
 #SBATCH --output=/l/users/%u/xarel/logs/%x-%j.out
 #SBATCH --error=/l/users/%u/xarel/logs/%x-%j.err
