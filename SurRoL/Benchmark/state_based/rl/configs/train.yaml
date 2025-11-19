@@ -1,0 +1,45 @@
+defaults:
+  - agent: sac #changed from ddpgc 
+  - _self_
+
+# File path
+cwd: ${hydra:runtime.output_dir}
+
+# Training params
+n_train_steps: 1_000_000 #need to proportionally reduce eval, save, log frequency
+# Changed frequencies accordingly For example, if max steps reduced by factor of 10, reduce n_eval, n_save, n_log by factor of 10.
+n_eval: 20  # Evaluate every 1000 episodes (50k steps) - reduced from 100 to prevent RAM spikes
+n_save: 10  # Save every 2000 episodes (100k steps)
+n_log: 1000
+#n_eval means means "divide total episodes into 10,000 parts and evaluate at each part"
+num_demo: 100 #make sure this matches the number of demos in demo_path
+n_seed_steps: ${agent.n_seed_steps}
+
+replay_buffer_capacity: 30_000  # HER multiplies by k=4, so 30k real = 120k with HER. Reduced to prevent RAM growth.
+batch_size: 128  # Increased back from 64 since we reduced buffer - batch size less critical than buffer
+device: cuda:0
+seed: 1
+task: GauzeRetrieveRL-v0
+postfix: null
+dont_save: False
+n_eval_episodes: 5  
+# This is key for HER to work well with sparse rewards
+demo_path: /home/gak/Documents/edoardo/gcdt_ckpt/success_demo/data_GauzeRetrieveRL-v0_random_100.npz
+
+use_wb: False
+project_name: surrol_gauzeretriever_sac
+entity_name: edoardo
+
+# MPI
+mpi: {rank: null, is_chef: null, num_workers: null}
+
+# Working space
+hydra:
+  run:
+    dir: ./exp_local/${task}/${agent.name}/d${num_demo}/s${seed}
+  sweep:
+    dir: ./exp_local/${task}/${agent.name}/d${num_demo}
+    subdir: ${seed}
+  sweeper:
+    params:
+      seed: 1,2,3,4,5
