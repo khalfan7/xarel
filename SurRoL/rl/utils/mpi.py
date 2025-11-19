@@ -1,12 +1,24 @@
 import numpy as np
 import torch
-from mpi4py import MPI
+
+try:
+    from mpi4py import MPI
+    MPI_AVAILABLE = True
+except ImportError:
+    MPI_AVAILABLE = False
+    MPI = None
 
 from .general_utils import (AttrDict, joinListDict, joinListDictList,
                             joinListList)
 
 
 def update_mpi_config(cfg):
+    if not MPI_AVAILABLE:
+        cfg.mpi.rank = 0
+        cfg.mpi.is_chef = True
+        cfg.mpi.num_workers = 1
+        return
+    
     rank = MPI.COMM_WORLD.Get_rank()
     cfg.mpi.rank = rank
     cfg.mpi.is_chef = rank == 0
@@ -17,22 +29,30 @@ def update_mpi_config(cfg):
 
 
 def mpi_sum(x):
+    if not MPI_AVAILABLE:
+        return np.array(x)
     buf = np.zeros_like(np.array(x))
     MPI.COMM_WORLD.Allreduce(np.array(x), buf, op=MPI.SUM)
     return buf
 
 
 def mpi_gather_experience_episode(experience_episode):
+    if not MPI_AVAILABLE:
+        return [experience_episode]
     buf = MPI.COMM_WORLD.allgather(experience_episode)
     return joinListDictList(buf)
 
 
 def mpi_gather_experience_rollots(experience_rollouts):
+    if not MPI_AVAILABLE:
+        return experience_rollouts
     buf = MPI.COMM_WORLD.allgather(experience_rollouts)
     return joinListDict(buf)
 
 
 def mpi_gather_experience_transitions(experience_transitions):
+    if not MPI_AVAILABLE:
+        return experience_transitions
     buf = MPI.COMM_WORLD.allgather(experience_transitions)
     return joinListList(buf)
 
@@ -52,6 +72,8 @@ def sync_networks(network):
     """
     netowrk is the network you want to sync
     """
+    if not MPI_AVAILABLE:
+        return  # No-op in single worker mode
     comm = MPI.COMM_WORLD
     flat_params, params_shape = _get_flat_params(network)
     comm.Bcast(flat_params, root=0)

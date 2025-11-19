@@ -14,6 +14,7 @@
 set -euo pipefail
 
 module purge >/dev/null 2>&1 || true
+module load openmpi4.1.2rc2
 source /apps/local/conda_init.sh
 conda activate "/l/users/${USER}/envs/arel"
 
