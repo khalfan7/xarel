@@ -12,7 +12,7 @@ set -euo pipefail
 if [ -z "${PROJECT_ROOT:-}" ]; then
   PROJECT_ROOT="/l/users/${USER}/xarel"
 fi
-ENV_PATH="/l/users/${USER}/envs/surrol-rl"
+ENV_PATH="/l/users/${USER}/envs/arel"
 
 source /apps/local/conda_init.sh
 conda activate "${ENV_PATH}"

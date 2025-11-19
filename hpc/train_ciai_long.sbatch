@@ -15,7 +15,7 @@ set -euo pipefail
 
 module purge >/dev/null 2>&1 || true
 source /apps/local/conda_init.sh
-conda activate "/l/users/${USER}/envs/surrol-rl"
+conda activate "/l/users/${USER}/envs/arel"
 
 PROJECT_ROOT="/l/users/${USER}/xarel"
 cd "${PROJECT_ROOT}/SurRoL/rl"
