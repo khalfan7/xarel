@@ -29,8 +29,8 @@ Inside the CIAI cluster you can keep the project under `/l/users/<user>/xarel` a
 
    ```bash
    source /apps/local/conda_init.sh
-   conda create -p /l/users/$USER/envs/surrol-rl python=3.10 -y
-   conda activate /l/users/$USER/envs/surrol-rl
+   conda create -p /l/users/$USER/envs/arel python=3.10 -y
+   conda activate /l/users/$USER/envs/arel
    pip install -r /l/users/$USER/xarel/SurRoL/rl/requirements.txt
    ```
 
@@ -60,10 +60,15 @@ Inside the CIAI cluster you can keep the project under `/l/users/<user>/xarel` a
 
    ```bash
    cd /l/users/$USER/xarel
-   chmod +x hpc/train_ciai_long.sbatch
    sbatch hpc/train_ciai_long.sbatch
    ```
 
-   The script requests the policy-required `long` partition resources (`--gres=gpu:4`, `--qos=gpu-12`) and launches `SurRoL/rl/train_rl.py`. Logs show up under `/l/users/$USER/xarel/logs/`.
+   The script requests the `long` partition (minimum 4 GPUs, max 12 GPUs or 3 jobs per account, 72h limit) and launches `SurRoL/rl/train_rl.py`. Logs show up under `/l/users/$USER/xarel/logs/`.
 
-Feel free to override task/seed within the batch script by exporting `TASK` or `SEED` variables before calling `sbatch` (e.g., `TASK=PegTransferRL-v0 sbatch hpc/train_ciai_long.sbatch`).
+   **Note:** CIAI `long` partition policies:
+   - Minimum 4 GPUs per job (`--gres=gpu:4`)
+   - Maximum 12 GPUs or 3 concurrent jobs per account
+   - Maximum 72 hours runtime
+   - No QoS flag needed (partition sets policy)
+
+Feel free to override task/seed by exporting `TASK` or `SEED` before calling `sbatch` (e.g., `TASK=PegTransferRL-v0 sbatch hpc/train_ciai_long.sbatch`).

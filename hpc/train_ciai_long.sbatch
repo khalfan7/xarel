@@ -1,7 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=surrol-train
 #SBATCH --partition=long
-#SBATCH --qos=gpu-12
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
 #SBATCH --ntasks-per-node=4
