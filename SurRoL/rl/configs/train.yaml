@@ -23,9 +23,10 @@ postfix: null
 dont_save: False
 n_eval_episodes: 20
 # This is key for HER to work well with sparse rewards
-demo_path: 
+#for HPC demo path is:
+demo_path: /l/users/khalfan.hableel/xarel/success_demo/data_GauzeRetrieveRL-v0_random_100.npz
 project_name: surrol_gauzeretriever_sac
-entity_name: edoardo
+entity_name: steph
 
 # MPI
 mpi: {rank: null, is_chef: null, num_workers: null}
