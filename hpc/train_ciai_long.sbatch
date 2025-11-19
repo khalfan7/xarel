@@ -1,0 +1,32 @@
+#!/bin/bash
+#SBATCH --job-name=surrol-train
+#SBATCH --partition=long
+#SBATCH --qos=gpu-12
+#SBATCH --nodes=1
+#SBATCH --gres=gpu:4
+#SBATCH --ntasks-per-node=4
+#SBATCH --cpus-per-task=32
+#SBATCH --mem=220G
+#SBATCH --time=48:00:00
+#SBATCH --output=/l/users/%u/xarel/logs/%x-%j.out
+#SBATCH --error=/l/users/%u/xarel/logs/%x-%j.err
+
+set -euo pipefail
+
+module purge >/dev/null 2>&1 || true
+source /apps/local/conda_init.sh
+conda activate "/l/users/${USER}/envs/surrol-rl"
+
+PROJECT_ROOT="/l/users/${USER}/xarel"
+cd "${PROJECT_ROOT}/SurRoL/rl"
+mkdir -p "${PROJECT_ROOT}/logs"
+
+export HYDRA_FULL_ERROR=1
+export OMP_NUM_THREADS="$SLURM_CPUS_PER_TASK"
+
+TASK_OVERRIDE=${TASK:-GauzeRetrieveRL-v0}
+SEED_OVERRIDE=${SEED:-1}
+
+python train_rl.py \
+  task=${TASK_OVERRIDE} \
+  seed=${SEED_OVERRIDE}
