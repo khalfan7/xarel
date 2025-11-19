@@ -18,7 +18,7 @@ replay_buffer_capacity: 100_000
 batch_size: 128
 device: cuda:0
 seed: 1
-task: NeedlePick-v0
+task: GauzeRetrieveRL-v0
 postfix: null
 dont_save: False
 n_eval_episodes: 20
