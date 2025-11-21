@@ -1,74 +1,62 @@
 # xarel
 
-This repository mirrors the current working state of the SurRoL benchmark codebase together with the `gcdt_ckpt` experimentation artifacts and the original `SETUP_README.md` instructions that describe how to prepare the environment.
+SAC+HER training for SurRoL surgical robotics tasks with demonstration data.
 
-## Layout
+## Structure
 
-- `SurRoL/` – full research codebase cloned from the working tree located under `/home/gak/Documents/edoardo/SurRoL` (state-based RL lives under `SurRoL/rl`).
-- `gcdt_ckpt/` – success demonstration datasets and checkpoints.
-- `SETUP_README.md` – original environment setup notes from the workspace root.
+- `SurRoL/rl/` – state-based RL training code (SAC, DDPG, HER buffer)
+- `gcdt_ckpt/success_demo/` – demonstration datasets (.npz files, 100 trajectories each)
+- `hpc/` – cluster job scripts for distributed training
+- `SETUP_README.md` – detailed setup and troubleshooting guide
 
-## Usage
+## Quick Start
 
-1. Consult `SETUP_README.md` for the exact dependency stack that was used locally.
-2. Install the Python requirements under `SurRoL/rl/requirements.txt` (a virtual environment is recommended).
-3. Run training scripts from `SurRoL/rl`, for example:
+```bash
+# Install dependencies (Python 3.10-3.12, venv recommended)
+cd SurRoL/rl
+pip install -r requirements.txt
+cd ../Benchmark/state_based
+pip install -e .
 
+# Run training
+cd rl
+python train_rl.py
+```
+
+Edit `configs/train.yaml` to change task, demo path, or hyperparameters.
+
+## HPC Cluster Usage
+
+The `hpc/` directory contains SLURM scripts for distributed training:
+
+1. **Setup environment** (modify paths in scripts for your cluster):
    ```bash
-   cd SurRoL/rl
-   python train_rl.py --help
+   # Create conda environment
+   conda create -n arel python=3.10 -y
+   conda activate arel
+   pip install -r SurRoL/rl/requirements.txt
    ```
 
-Large binary artifacts (e.g., checkpoints) are kept as-is; consider migrating them to Git LFS if you plan to make the public repository lightweight.
-
-## CIAI HPC quickstart
-
-Inside the CIAI cluster you can keep the project under `/l/users/<user>/xarel` and use the helper scripts in `hpc/`.
-
-1. **Create/activate the Conda environment (run once on CIAI):**
-
+2. **Interactive testing**:
    ```bash
-   source /apps/local/conda_init.sh
-   conda create -p /l/users/$USER/envs/arel python=3.10 -y
-   conda activate /l/users/$USER/envs/arel
-   pip install -r /l/users/$USER/xarel/SurRoL/rl/requirements.txt
+   # Short debug job to verify setup
+   srun -p <gpu-partition> --gres=gpu:1 --cpus-per-task=8 \
+        --time=00:30:00 --pty bash hpc/debug_run.sh
    ```
 
-2. **Interactive run on `cscc-gpu-p` (pick the right QoS):**
-
-   - **General work (longer interactive sessions):**
-
+3. **Submit training job**:
    ```bash
-   cd /l/users/$USER/xarel
-   chmod +x hpc/debug_run.sh
-   srun -p cscc-gpu-p -q cscc-gpu-qos --gres=gpu:1 --cpus-per-task=8 \
-      --time=02:00:00 --pty bash hpc/debug_run.sh
+   # Long multi-GPU training
+   sbatch hpc/train_long.sbatch
    ```
 
-   - **Debug queue (≤3 h, ≤4 GPUs per user total):**
+Override task/seed via environment variables: `TASK=PegTransferRL-v0 sbatch hpc/train_long.sbatch`
 
-   ```bash
-   cd /l/users/$USER/xarel
-   chmod +x hpc/debug_run.sh
-   srun -p cscc-gpu-p -q gpu-debug-qos --gres=gpu:1 --cpus-per-task=8 \
-      --time=00:30:00 --pty bash hpc/debug_run.sh
-   ```
+## Key Features
 
-   Both commands run the short `train_rl.py` session bundled in `hpc/debug_run.sh` to quickly verify dependencies and configs before submitting a long job.
+- **Algorithms**: SAC, DDPG, DDPG+BC, DEX (all with HER)
+- **Tasks**: 10 surgical manipulation tasks (NeedlePick, GauzeRetrieve, PegTransfer, etc.)
+- **Demo integration**: Pre-fills replay buffer and initializes normalizers
+- **Sparse rewards**: HER enables learning from failure trajectories
 
-3. **Queued training job on the CIAI long partition:**
-
-   ```bash
-   cd /l/users/$USER/xarel
-   sbatch hpc/train_ciai_long.sbatch
-   ```
-
-   The script requests the `long` partition (minimum 4 GPUs, max 12 GPUs or 3 jobs per account, 72h limit) and launches `SurRoL/rl/train_rl.py`. Logs show up under `/l/users/$USER/xarel/logs/`.
-
-   **Note:** CIAI `long` partition policies:
-   - Minimum 4 GPUs per job (`--gres=gpu:4`)
-   - Maximum 12 GPUs or 3 concurrent jobs per account
-   - Maximum 72 hours runtime
-   - No QoS flag needed (partition sets policy)
-
-Feel free to override task/seed by exporting `TASK` or `SEED` before calling `sbatch` (e.g., `TASK=PegTransferRL-v0 sbatch hpc/train_ciai_long.sbatch`).
+See `SETUP_README.md` for Gym API fixes, dependency troubleshooting, and config parameter explanations.
