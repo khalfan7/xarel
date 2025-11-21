@@ -25,6 +25,7 @@ n_eval_episodes: 20
 # This is key for HER to work well with sparse rewards
 #for HPC demo path is:
 demo_path: /l/users/khalfan.hableel/xarel/success_demo/data_GauzeRetrieveRL-v0_random_100.npz
+use_wb: False
 project_name: surrol_gauzeretriever_sac
 entity_name: steph
 
