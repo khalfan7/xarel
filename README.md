@@ -4,10 +4,31 @@ SAC+HER training for SurRoL surgical robotics tasks with demonstration data.
 
 ## Structure
 
-- `SurRoL/rl/` – state-based RL training code (SAC, DDPG, HER buffer)
-- `gcdt_ckpt/success_demo/` – demonstration datasets (.npz files, 100 trajectories each)
-- `hpc/` – cluster job scripts for distributed training
-- `SETUP_README.md` – detailed setup and troubleshooting guide
+```
+xarel/
+├── SurRoL/
+│   ├── rl/                    # RL training code
+│   │   ├── train_rl.py        # Main training script
+│   │   ├── configs/           # Hydra config files (train.yaml, eval.yaml)
+│   │   ├── agents/            # RL algorithms (SAC, DDPG, DDPG+BC, DEX)
+│   │   ├── trainers/          # RLTrainer and base trainer classes
+│   │   ├── modules/           # Replay buffer, HER, samplers
+│   │   ├── components/        # Logger, checkpointer, WandB integration
+│   │   ├── utils/             # RL utilities, MPI helpers
+│   │   └── requirements.txt   # Python dependencies
+│   ├── surrol/                # SurRoL environment package
+│   └── setup.py               # Package installation
+├── success_demo/              # Demo datasets (100 trajectories each)
+│   ├── data_GauzeRetrieveRL-v0_random_100.npz
+│   ├── data_NeedlePickRL-v0_random_100.npz
+│   ├── data_PegTransferRL-v0_random_100.npz
+│   └── ... (7 more task demos)
+├── hpc/                       # Cluster job scripts
+│   ├── train_ciai_long.sbatch # Long training job
+│   └── debug_run.sh           # Interactive testing
+├── README.md                  # This file
+└── SETUP_README.md            # Detailed setup guide
+```
 
 ## Quick Start
 
