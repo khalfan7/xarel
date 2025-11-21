@@ -22,7 +22,6 @@ PROJECT_ROOT="/l/users/${USER}/xarel"
 cd "${PROJECT_ROOT}/SurRoL/rl"
 mkdir -p "${PROJECT_ROOT}/logs"
 
-# Maximize CPU utilization for PyBullet (CPU-only simulation)
 export OMP_NUM_THREADS=128
 export MKL_NUM_THREADS=128
 export NUMEXPR_NUM_THREADS=128

@@ -61,13 +61,6 @@ class SAC(BaseAgent):
             self.dimo+self.dimg+self.dima, agent_cfg.hidden_dim
         ).to(agent_cfg.device)
         self.critic_target = copy.deepcopy(self.critic).to(agent_cfg.device)
-        
-        # Enable DataParallel for multi-GPU if available
-        if torch.cuda.device_count() > 1 and agent_cfg.get('use_data_parallel', False):
-            print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
-            self.actor = torch.nn.DataParallel(self.actor)
-            self.critic = torch.nn.DataParallel(self.critic)
-            self.critic_target = torch.nn.DataParallel(self.critic_target)
 
         # entropy term 
         if self.learnable_temperature:
