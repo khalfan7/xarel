@@ -15,9 +15,9 @@ clip_obs: 200
 norm_clip: 5
 norm_eps: 0.01
 hidden_dim: 256  #dont change
-use_data_parallel: True  # Enable multi-GPU training with DataParallel
+use_data_parallel: False  # DataParallel incompatible with RL distributions
 sampler:
   type: her
   strategy: future
   k: 4
-update_epoch: 10  # Increased for larger batches with 4 GPUs
+update_epoch: 1  # 1 update per episode (50 steps) for faster training
