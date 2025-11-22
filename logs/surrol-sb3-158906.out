@@ -492,3 +492,39 @@ Logging to /l/users/khalfan.hableel/xarel/sb3/outputs/GauzeRetrieveRL-v0/seed_1/
 |    learning_rate   | 0.0003   |
 |    n_updates       | 2499     |
 ---------------------------------
+---------------------------------
+| rollout/           |          |
+|    ep_len_mean     | 50       |
+|    ep_rew_mean     | -50      |
+|    success_rate    | 0        |
+| time/              |          |
+|    episodes        | 310      |
+|    fps             | 82       |
+|    time_elapsed    | 189      |
+|    total_timesteps | 15600    |
+| train/             |          |
+|    actor_loss      | -31.7    |
+|    critic_loss     | 0.0396   |
+|    ent_coef        | 0.416    |
+|    ent_coef_loss   | -7.34    |
+|    learning_rate   | 0.0003   |
+|    n_updates       | 2649     |
+---------------------------------
+---------------------------------
+| rollout/           |          |
+|    ep_len_mean     | 50       |
+|    ep_rew_mean     | -50      |
+|    success_rate    | 0        |
+| time/              |          |
+|    episodes        | 320      |
+|    fps             | 82       |
+|    time_elapsed    | 194      |
+|    total_timesteps | 16000    |
+| train/             |          |
+|    actor_loss      | -32.7    |
+|    critic_loss     | 0.0621   |
+|    ent_coef        | 0.404    |
+|    ent_coef_loss   | -7.62    |
+|    learning_rate   | 0.0003   |
+|    n_updates       | 2749     |
+---------------------------------
