@@ -4,17 +4,13 @@
 task: GauzeRetrieveRL-v0
 seed: 1
 
-# Demo data
-num_demo: 100
-demo_path: /l/users/khalfan.hableel/xarel/success_demo/data_GauzeRetrieveRL-v0_random_100.npz
-
 # Training parameters
 total_timesteps: 1_000_000  # Total training steps
 learning_starts: 5_000  # Steps before learning starts (random exploration)
 log_interval: 10  # Log every N episodes
 
 # Parallel environments
-n_envs: 12  # Number of parallel environments
+n_envs: 4  # Reduced from 12 to 4 to prevent OOM (each PyBullet env uses ~5-10GB)
 
 # Replay buffer
 buffer_size: 1_500_000  
@@ -57,5 +53,15 @@ save_freq: 20_000  # Save checkpoint every N steps
 # Device
 device: cuda
 
-# Output
-output_dir: ./exp_sb3
+# Output structure (all consolidated under sb3/outputs/)
+# Structure: sb3/outputs/{task}/seed_{seed}/
+#   ├── checkpoints/       - Periodic model saves
+#   ├── best_model/        - Best performing model  
+#   ├── tensorboard/       - Training metrics
+#   ├── eval_logs/         - Evaluation results
+#   ├── final_model.zip    - Final trained model
+#   ├── vec_normalize.pkl  - Normalization statistics
+#   └── hydra/             - Hydra config files
+hydra:
+  run:
+    dir: ${hydra:runtime.cwd}/outputs/${task}/seed_${seed}/hydra

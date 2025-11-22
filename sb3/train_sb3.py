@@ -80,9 +80,23 @@ def main(cfg: DictConfig):
     print(f"Device: {cfg.device}")
     print("="*60)
     
-    # Create output directory
-    output_dir = Path(cfg.output_dir) / cfg.task / f"seed_{cfg.seed}"
+    # Consolidated output directory structure:
+    # sb3/outputs/{task}/seed_{seed}/
+    #   ├── checkpoints/       - Periodic model saves
+    #   ├── best_model/        - Best model during eval
+    #   ├── tensorboard/       - Training logs
+    #   ├── eval_logs/         - Evaluation results
+    #   ├── final_model.zip    - Final trained model
+    #   └── vec_normalize.pkl  - Normalization stats
+    
+    # Use absolute path to avoid Hydra changing working directory
+    script_dir = Path(__file__).parent
+    output_dir = script_dir / "outputs" / cfg.task / f"seed_{cfg.seed}"
     output_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Output directory: {output_dir}")
+    print(f"Working directory: {os.getcwd()}")
+    print("="*60)
     
     # Create vectorized environment with multiple parallel processes
     env = make_vec_env(

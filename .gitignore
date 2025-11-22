@@ -97,3 +97,26 @@ target/
 
 # Backup files
 *~
+
+# Training outputs and logs (regenerated)
+logs/
+sb3/results/
+sb3/exp_sb3/
+sb3/hydra_outputs/
+sb3/outputs/
+
+# Model checkpoints (large files)
+*.zip
+*.pkl
+*.npz
+*.pth
+
+# TensorBoard
+events.out.tfevents.*
+
+# Hydra
+.hydra/
+multirun/
+
+# Keep example configs
+!sb3/configs/*.yaml
