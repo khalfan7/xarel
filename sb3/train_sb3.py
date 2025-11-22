@@ -1,0 +1,221 @@
+"""
+Train SurRoL tasks using Stable-Baselines3 SAC+HER
+Memory-efficient alternative to custom implementation
+"""
+
+import os
+import sys
+import numpy as np
+import gymnasium
+import hydra
+from pathlib import Path
+from omegaconf import DictConfig
+
+# Add SurRoL to path
+sys.path.insert(0, str(Path(__file__).parent.parent / "SurRoL"))
+
+# Stable-Baselines3 imports
+from stable_baselines3 import SAC
+from stable_baselines3.her.her_replay_buffer import HerReplayBuffer
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, DummyVecEnv
+from stable_baselines3.common.env_util import make_vec_env
+
+# Register SurRoL environments
+import surrol.gym
+
+
+def make_env(task_name, rank=0, seed=0):
+    """Create environment for SurRoL (now using gymnasium natively)"""
+    def _init():
+        # SurRoL now uses gymnasium natively
+        env = gymnasium.make(task_name, render_mode=None)
+        # Seed will be handled by reset(seed=...) in gymnasium API
+        return env
+    return _init
+
+
+def load_demonstrations(demo_path, env, n_demos=100):
+    """
+    Load demonstration data and add to replay buffer
+    Compatible with SB3 HER format
+    """
+    if not os.path.exists(demo_path):
+        print(f"Warning: Demo file not found: {demo_path}")
+        return None
+        
+    data = np.load(demo_path, allow_pickle=True)
+    
+    # Convert demo data to SB3 format
+    demo_buffer = []
+    
+    for i in range(min(n_demos, len(data['obs']))):
+        episode = {
+            'observations': data['obs'][i],
+            'actions': data['actions'][i],
+            'rewards': data['rewards'][i] if 'rewards' in data else None,
+            'next_observations': data['obs_next'][i] if 'obs_next' in data else data['obs'][i][1:],
+            'dones': data['dones'][i] if 'dones' in data else None,
+        }
+        
+        # Handle goal-based environments
+        if 'desired_goal' in data:
+            episode['desired_goal'] = data['desired_goal'][i]
+            episode['achieved_goal'] = data['achieved_goal'][i]
+            
+        demo_buffer.append(episode)
+    
+    print(f"Loaded {len(demo_buffer)} demonstration episodes")
+    return demo_buffer
+
+
+@hydra.main(version_base=None, config_path="./configs", config_name="train_sb3")
+def main(cfg: DictConfig):
+    """Main training loop using Stable-Baselines3"""
+    
+    print("="*60)
+    print(f"Training {cfg.task} with SB3 SAC+HER")
+    print(f"Seed: {cfg.seed}, Parallel Envs: {cfg.n_envs}")
+    print(f"Buffer Size: {cfg.buffer_size:,} (RAM efficient)")
+    print(f"Device: {cfg.device}")
+    print("="*60)
+    
+    # Create output directory
+    output_dir = Path(cfg.output_dir) / cfg.task / f"seed_{cfg.seed}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create vectorized environment with multiple parallel processes
+    env = make_vec_env(
+        make_env(cfg.task, seed=cfg.seed),
+        n_envs=cfg.n_envs,
+        vec_env_cls=SubprocVecEnv,
+        seed=cfg.seed
+    )
+    
+    # Normalize observations (not rewards for sparse reward tasks)
+    if cfg.normalize:
+        env = VecNormalize(
+            env,
+            norm_obs=cfg.get('norm_obs', True),
+            norm_reward=cfg.get('norm_reward', False),
+            clip_obs=cfg.get('clip_obs', 10.0),  # SB3 default is 10.0
+            clip_reward=cfg.get('clip_reward', 10.0),
+        )
+    
+    # Create eval environment (single env for evaluation)
+    eval_env = make_vec_env(
+        make_env(cfg.task, seed=cfg.seed + 1000),
+        n_envs=1,
+        seed=cfg.seed + 1000
+    )
+    if cfg.normalize:
+        eval_env = VecNormalize(
+            eval_env,
+            training=False,  # Don't update stats during eval
+            norm_obs=cfg.get('norm_obs', True),
+            norm_reward=False,
+            clip_obs=cfg.get('clip_obs', 10.0),
+        )
+    
+    # HER-specific configuration
+    her_kwargs = dict(
+        n_sampled_goal=cfg.her.n_sampled_goal,
+        goal_selection_strategy=cfg.her.strategy,
+        # online_sampling removed in SB3 2.0+ (always online now)
+        handle_timeout_termination=cfg.her.handle_timeout_termination,
+    )
+    
+    # Policy network architecture
+    policy_kwargs = dict(
+        net_arch=list(cfg.policy_kwargs.net_arch)
+    )
+    
+    # SAC with HER (optimized for sparse rewards in goal-based environments)
+    model = SAC(
+        policy="MultiInputPolicy",
+        env=env,
+        learning_rate=cfg.learning_rate,
+        buffer_size=cfg.buffer_size,
+        learning_starts=cfg.learning_starts,
+        batch_size=cfg.batch_size,
+        tau=cfg.tau,
+        gamma=cfg.gamma,
+        train_freq=cfg.train_freq,
+        gradient_steps=cfg.gradient_steps,
+        ent_coef=cfg.ent_coef,
+        target_update_interval=cfg.target_update_interval,
+        target_entropy=cfg.target_entropy,
+        use_sde=cfg.use_sde,
+        policy_kwargs=policy_kwargs,
+        replay_buffer_class=HerReplayBuffer,
+        replay_buffer_kwargs=her_kwargs,
+        verbose=1,
+        tensorboard_log=str(output_dir / "tensorboard"),
+        device=cfg.device,
+        seed=cfg.seed,
+    )
+    
+    print(f"\nModel created successfully!")
+    print(f"Policy network: {policy_kwargs['net_arch']}")
+    print(f"Action space: {env.action_space}")
+    print(f"Observation space keys: {env.observation_space.spaces.keys()}")
+
+    # Callbacks
+    callbacks = []
+    
+    # Checkpoint callback - save model periodically
+    checkpoint_callback = CheckpointCallback(
+        save_freq=cfg.save_freq,
+        save_path=str(output_dir / "checkpoints"),
+        name_prefix="sac_her",
+        save_replay_buffer=False,  # Don't save buffer (too large)
+        save_vecnormalize=cfg.normalize,
+    )
+    callbacks.append(checkpoint_callback)
+    
+    # Evaluation callback
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path=str(output_dir / "best_model"),
+        log_path=str(output_dir / "eval_logs"),
+        eval_freq=cfg.eval_freq,
+        n_eval_episodes=cfg.n_eval_episodes,
+        deterministic=True,
+        render=False,
+    )
+    callbacks.append(eval_callback)
+    
+    # Train the model
+    print(f"\nStarting training for {cfg.total_timesteps:,} steps...")
+    model.learn(
+        total_timesteps=cfg.total_timesteps,
+        callback=callbacks,
+        log_interval=cfg.log_interval,
+        tb_log_name=f"{cfg.task}_seed{cfg.seed}",
+        reset_num_timesteps=True,
+        progress_bar=True,
+    )
+    
+    # Save final model
+    final_model_path = output_dir / "final_model"
+    model.save(str(final_model_path))
+    print(f"\nFinal model saved to {final_model_path}")
+    
+    # Save normalization stats
+    if cfg.normalize:
+        vec_normalize_path = output_dir / "vec_normalize.pkl"
+        env.save(str(vec_normalize_path))
+        print(f"Normalization stats saved to {vec_normalize_path}")
+    
+    # Close environments
+    env.close()
+    eval_env.close()
+    
+    print("\n" + "="*60)
+    print("Training completed successfully!")
+    print(f"Results saved to: {output_dir}")
+    print("="*60)
+
+
+if __name__ == "__main__":
+    main()

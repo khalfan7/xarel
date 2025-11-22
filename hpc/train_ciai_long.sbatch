@@ -4,7 +4,7 @@
 #SBATCH --qos=gpu-debug-qos
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --gres=gpu:4
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=128
 #SBATCH --mem=240G
 #SBATCH --time=03:00:00
@@ -18,6 +18,10 @@ module load openmpi4.1.2rc2
 source /apps/local/conda_init.sh
 conda activate "/l/users/${USER}/envs/arel"
 
+# Ensure mpi4py uses system OpenMPI
+export MPICC=$(which mpicc)
+export LD_LIBRARY_PATH=${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH}
+
 PROJECT_ROOT="/l/users/${USER}/xarel"
 cd "${PROJECT_ROOT}/SurRoL/rl"
 mkdir -p "${PROJECT_ROOT}/logs"
@@ -26,10 +30,14 @@ export OMP_NUM_THREADS=128
 export MKL_NUM_THREADS=128
 export NUMEXPR_NUM_THREADS=128
 export HYDRA_FULL_ERROR=1
+export CUDA_LAUNCH_BLOCKING=0
 
 TASK_OVERRIDE=${TASK:-GauzeRetrieveRL-v0}
 SEED_OVERRIDE=${SEED:-1}
 
-python train_rl.py \
-  task=${TASK_OVERRIDE} \
-  seed=${SEED_OVERRIDE}
+echo "Starting training at $(date)"
+echo "Task: ${TASK_OVERRIDE}, Seed: ${SEED_OVERRIDE}"
+echo "CUDA devices: $CUDA_VISIBLE_DEVICES"
+nvidia-smi --query-gpu=name,memory.total --format=csv
+
+python train_rl.py

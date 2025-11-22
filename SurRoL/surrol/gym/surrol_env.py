@@ -1,9 +1,9 @@
 import time,os
 import socket
 
-import gym
-from gym import spaces
-from gym.utils import seeding
+import gymnasium as gym
+from gymnasium import spaces
+import numpy as np  # For seeding
 
 import pybullet as p
 import pybullet_data
@@ -175,7 +175,11 @@ class SurRoLEnv(gym.Env):
             return rgb_array, mask
 
     def seed(self, seed=None):
-        self._np_random, seed = seeding.np_random(seed)
+        # Gymnasium-compatible seeding
+        if seed is not None:
+            self._np_random = np.random.RandomState(seed)
+        else:
+            self._np_random = np.random.RandomState()
         return [seed]
 
     def compute_reward(self, achieved_goal, desired_goal, info):

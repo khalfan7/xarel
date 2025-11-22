@@ -1,0 +1,27 @@
+# Stable-Baselines3 Requirements
+# Memory-efficient RL training for SurRoL
+
+# Core dependencies
+stable-baselines3[extra]>=2.0.0
+gymnasium>=0.28.0  # SB3 uses Gymnasium (Gym's successor)
+tensorboard>=2.11.0
+shimmy>=0.2.1  # Gym-to-Gymnasium wrapper
+
+# Configuration management (for Hydra)
+hydra-core>=1.3.0
+omegaconf>=2.3.0
+
+# Existing SurRoL dependencies (ensure compatibility)
+numpy>=1.21.0,<2.0.0
+torch>=1.10.0
+gym==0.26.2  # Compatible with Python 3.12
+pybullet>=3.2.5  # Physics simulation for SurRoL
+
+# Optional but recommended
+wandb>=0.15.0  # For WandB integration
+optuna>=3.0.0  # For hyperparameter tuning
+matplotlib>=3.5.0
+seaborn>=0.12.0
+
+# For better performance
+psutil>=5.9.0  # Memory monitoring
