@@ -1,56 +1,201 @@
+# ============================================================================
+# SAC + HER Training Configuration with Best Practices
+# ============================================================================
+# Based on Stable-Baselines3 documentation, RL tips & tricks
+# Algorithm: SAC (Soft Actor-Critic) + HER (Hindsight Experience Replay)
+# ============================================================================
+
 # Task and seed
 task: GauzeRetrieveRL-v0
-seed: 42
+seed: 42  # IMPORTANT: Run with multiple seeds (3-5) for reliable results
 
-# Training parameters
-total_timesteps: 1_000_000  # Total training steps
-learning_starts: 5_000  # Steps before learning starts (random exploration)
-log_interval: 10  # Log every N episodes
+# ============================================================================
+# Environment Validation (Optional)
+# ============================================================================
+check_env: true   # Run SB3 env_checker before training
+                  # Custom TimeLimit wrapper now forwards compute_reward
+                  # Validates observation/action spaces, reset/step methods
 
-# Parallel environments
-n_envs: 4  # Reduced from 12 to 4 to prevent OOM (each PyBullet env uses ~5-10GB)
+# ============================================================================
+# Training Parameters
+# ============================================================================
+total_timesteps: 1_000_000  # Total environment steps (lower bound for HER)
+learning_starts: 10_000      # Random exploration before learning (warmup)
+log_interval: 10            # Log every N episodes (for off-policy algorithms)
 
-# Replay buffer
-buffer_size: 1_500_000  
-batch_size: 512
+# ============================================================================
+# Parallel Environments
+# ============================================================================
+# Trade-offs:
+# - More envs = faster data collection, but more memory
+# - SAC is single-process (no parallel advantage during gradient updates)
+# - PyBullet envs are heavy (~5-10GB GPU memory each)
+n_envs: 8  # Balance: more envs = faster collection, but more memory
 
-# SAC hyperparameters
-learning_rate: 3e-4  
-tau: 0.02  
-gamma: 0.98  
-train_freq: 1  
-gradient_steps: 1  
-ent_coef: 'auto'  
-target_update_interval: 1
-target_entropy: 'auto'  
-use_sde: false  
+# ============================================================================
+# Replay Buffer Configuration
+# ============================================================================
+buffer_size: 1_500_000  # 1M sufficient for most tasks
+batch_size: 256         # SB3 default, more stable than larger batches
 
-# Policy network architecture
+# ============================================================================
+# SAC Hyperparameters
+# ============================================================================
+learning_rate: 3e-4         # Default Adam LR (works well for most tasks)
+use_lr_schedule: false      # Set true for linear decay from learning_rate to 0
+
+tau: 0.005                  # CHANGED: SB3 default (was 0.02)
+                            # Soft update coefficient for target networks
+                            # Lower = more stable, slower target updates
+
+gamma: 0.95                 # CHANGED: Lower for sparse rewards (was 0.98)
+                            # For manipulation: 0.95-0.98 works well
+
+train_freq: 1               # Update every step (standard for SAC)
+
+gradient_steps: -1          # CHANGED: -1 = as many as rollout steps (was 1)
+                            # More sample efficient, recommended for off-policy
+                            # Set to 1 if training too slow
+
+ent_coef: 'auto'            # Auto-tune entropy coefficient (recommended)
+
+target_update_interval: 1   # Update target network every step (standard)
+
+target_entropy: 'auto'      # Auto: -dim(action_space) (recommended)
+
+use_sde: false              # Set true for State-Dependent Exploration (gSDE)
+                            # gSDE often works better for manipulation
+
+sde_sample_freq: -1         # Only used if use_sde=true (-1 = episode start)
+
+use_sde_at_warmup: false    # Use gSDE during warmup instead of uniform sampling  
+
+# ============================================================================
+# Policy Network Architecture
+# ============================================================================
 policy_kwargs:
-  net_arch: [512, 512, 512]  
+  net_arch: [256, 256]      # CHANGED: Smaller network (was [512, 512, 512])
+                            # Start smaller, increase if needed
+                            # [256, 256] = faster, [512, 512, 512] = more capacity
+  
+  n_critics: 2              # Number of Q-networks (2 = double Q-learning)
+  
+  share_features_extractor: false  # Share features between actor/critic
+                                   # true = faster, less capacity  
 
-# HER parameters
+# ============================================================================
+# HER (Hindsight Experience Replay) Configuration
+# ============================================================================
+# Reference: https://arxiv.org/abs/1707.01495
+# HER creates "virtual" transitions by relabeling goals from past episodes
 her:
-  strategy: 'future'  # future, episode, random
-  n_sampled_goal: 4 
-  online_sampling: true 
-  handle_timeout_termination: true  
+  strategy: 'future'  # 'future' (best for most tasks), 'episode', 'final'
+                      # future: Sample from FUTURE states in same episode
+                      # episode: Sample from ANY state in same episode
+                      # final: Use FINAL state of episode as goal
+  
+  n_sampled_goal: 6   # Number of virtual transitions per real transition
+                      # Trade-off: Higher (6-8) = more signal, slower updates
+                      #           Lower (2-3) = faster, less signal
+                      # Recommended: 4 (good balance)
+  
+  handle_timeout_termination: true  # CRITICAL for time-limited environments!
+                                    # Treats timeout as infinite horizon
+  
+  copy_info_dict: false  # Only true if compute_reward() needs info dict
+                         # false = faster (recommended)  
 
-# Environment normalization
-normalize: true  
-norm_obs: true 
-norm_reward: false  
-clip_obs: 200.0  
-clip_reward: 200.0  
+# ============================================================================
+# Observation Normalization - CRITICAL FOR RL PERFORMANCE
+# ============================================================================
+# Best Practice: ALWAYS normalize observations when possible
+# Most RL algorithms require normalized inputs to work well
+normalize: true       # STRONGLY RECOMMENDED for all tasks
 
-# Evaluation
-eval_freq: 10_000  
-n_eval_episodes: 20  
-save_freq: 20_000  
+norm_obs: true        # Normalize observations (running mean/std)
 
-# Device
-device: cuda
+norm_reward: false    # CRITICAL: NEVER normalize sparse rewards!
+                      # Sparse rewards (-1/0) should NOT be normalized
+                      # Only normalize dense, shaped rewards
 
+clip_obs: 200.0       # Clip normalized obs to [-200, 200]
+                      # More generous than SB3 default (10.0)
+                      # Prevents extreme outliers
+
+clip_reward: 200.0    # Clip rewards (only matters if norm_reward=true)  
+
+# ============================================================================
+# Evaluation Configuration
+# ============================================================================
+eval_freq: 10_000         # Evaluate every N training steps
+                          # Adjusted automatically for parallel envs
+
+n_eval_episodes: 10       # CHANGED: Reduced from 20 (10 is sufficient)
+                          # Number of episodes per evaluation
+
+# ============================================================================
+# Checkpointing
+# ============================================================================
+save_freq: 50_000         # CHANGED: Save every 50k steps (was 20k)
+                          # Less frequent = less disk I/O
+                          # For 1M steps: ~20 checkpoints
+
+save_replay_buffer: false # Don't save replay buffer during checkpoints
+                          # HER buffers are huge (stores goals too)
+
+save_final_replay_buffer: false  # Save replay buffer at end of training
+                                 # Useful for analysis or continuing training
+                                 # Warning: Can be several GB
+
+# ============================================================================
+# Model Saving
+# ============================================================================
+save_policy_only: true    # Save policy separately (recommended for HER)
+                          # Allows inference without loading full model+env
+                          # Smaller, faster, no env dependency
+
+# ============================================================================
+# Memory Optimization
+# ============================================================================
+optimize_memory_usage: false  # NOT supported by DictReplayBuffer (used by HER)
+                              # SB3 limitation: only basic ReplayBuffer supports this
+                              # HER requires Dict observation space  
+
+# ============================================================================
+# Device Configuration
+# ============================================================================
+device: cuda  # 'cuda', 'cpu', or 'cuda:0' for specific GPU
+
+# ============================================================================
+# Hydra Configuration
+# ============================================================================
 hydra:
   run:
     dir: ${hydra:runtime.cwd}/outputs/${task}/seed_${seed}/hydra
+
+# ============================================================================
+# Recommended Configurations for Different Scenarios
+# ============================================================================
+#
+# FAST PROTOTYPING (quick iteration):
+#   n_envs: 8, net_arch: [128, 128], buffer_size: 500_000
+#   gradient_steps: 1, eval_freq: 5_000, n_sampled_goal: 2
+#
+# SAMPLE EFFICIENCY (maximize HER):
+#   gradient_steps: -1, batch_size: 512, n_sampled_goal: 8
+#   her.strategy: 'future', learning_starts: 1_000
+#
+# STABILITY (if training is unstable):
+#   tau: 0.001, batch_size: 128, learning_rate: 1e-4
+#   gamma: 0.95, gradient_steps: 1, n_sampled_goal: 2
+#
+# HIGH PERFORMANCE (if you have resources):
+#   n_envs: 16, net_arch: [512, 512, 512], buffer_size: 2_000_000
+#   batch_size: 512, gradient_steps: -1, n_sampled_goal: 6
+#
+# VERY SPARSE REWARDS (surgical tasks):
+#   n_sampled_goal: 6-8, her.strategy: 'future', gamma: 0.95
+#   learning_starts: 10_000, buffer_size: 1_500_000
+#   norm_reward: false (CRITICAL!)
+#
+# ============================================================================

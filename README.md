@@ -1,77 +1,184 @@
 # xarel
 
-SAC+HER training for SurRoL surgical robotics tasks with demonstration data.
+SAC+HER training for SurRoL surgical robotics tasks with Stable-Baselines3.
 
-## Task Overview
+## Overview
 
-SurRoL provides surgical robotics manipulation tasks with sparse rewards and goal-based learning. Tasks like **GauzeRetrieveRL-v0** require complex multi-stage manipulation:
+SurRoL provides surgical robotics manipulation tasks with sparse rewards and goal-based learning. This implementation uses:
+- **SAC** (Soft Actor-Critic) for continuous control
+- **HER** (Hindsight Experience Replay) for sparse reward learning
+- **Optimized hyperparameters** based on SB3 best practices
+- **Custom TimeLimit wrapper** to maintain compute_reward compatibility
 
-### Task Complexity Example: Gauze Retrieval
-The agent must learn a 5-waypoint sequential manipulation task:
-1. **Navigate to object** (~10 steps) - Move gripper to gauze location
-2. **Precisely align** (~5 steps) - Position gripper above object
-3. **Grasp timing** - Close gripper at the right moment for stable grasp
-4. **Lift object** (~10 steps) - Elevate gauze without dropping
-5. **Transport to goal** (~15 steps) - Move to target location
-6. **Precision requirement**: Final position must be within **0.005m (5mm)** of goal
+### Example: Gauze Retrieval Task
+A 5-waypoint sequential manipulation task:
+1. Navigate to gauze location
+2. Precisely align gripper above object
+3. Execute timed grasp for stable grip
+4. Lift object without dropping
+5. Transport to goal (0.005m precision required)
 
-### Training Expectations
-- **Success threshold**: 0.005m (5mm precision)
-- **Initial distance**: ~0.25m (50x the threshold)
-- **Episode length**: 50 steps (tight constraint for 5-stage task)
-- **Expected timeline**: 
-  - 0-200k steps: Pure exploration, success_rate = 0%
-  - 200k-500k steps: First successes appear (HER learning kicks in)
-  - 500k-1M steps: Success rate climbs to 20-60%
+## Quick Start
 
-**Note**: Success rate of 0% before 200k-300k steps is **completely normal** for sparse reward manipulation tasks. The agent is learning foundational skills during this period.
+### 1. Setup Environment
 
-## HPC Cluster Usage
+```bash
+# Create conda environment
+conda create -n arel python=3.12 -y
+conda activate arel
 
-The `hpc/` directory contains SLURM scripts for distributed training:
+# Install SurRoL environment
+cd SurRoL
+pip install -e .
+cd ..
 
-1. **Setup environment** (modify paths in scripts for your cluster):
-   ```bash
-   # Create conda environment
-   conda create -n arel python=3.10 -y
-   conda activate arel
-   pip install -r SurRoL/rl/requirements.txt
-   ```
+# Install training dependencies
+pip install stable-baselines3[extra]
+pip install hydra-core
+pip install tensorboard
+```
 
-2. **Interactive testing**:
-   ```bash
-   # Short debug job to verify setup
-   srun -p <gpu-partition> --gres=gpu:1 --cpus-per-task=8 \
-        --time=00:30:00 --pty bash hpc/debug_run.sh
-   ```
-
-3. **Submit training job**:
-   ```bash
-   # Long multi-GPU training (recommended: 1M steps minimum)
-   sbatch hpc/train_long.sbatch
-   ```
-
-Override task/seed via environment variables: `TASK=PegTransferRL-v0 sbatch hpc/train_long.sbatch`
-
-## Training Diagnostics
-
-Monitor training progress with the diagnostic tool:
+### 2. Train a Model
 
 ```bash
 cd sb3
-source /apps/local/conda_init.sh
-conda activate /l/users/${USER}/envs/arel
-python diagnose_training.py
+
+# Basic training (uses train_sb3.yaml config)
+python train_sb3.py
+
+# Different task
+python train_sb3.py task=NeedlePickRL-v0
+
+# Different seed
+python train_sb3.py seed=123
+
+# Adjust training duration
+python train_sb3.py total_timesteps=2_000_000
 ```
 
-This analyzes:
-- Task difficulty (initial distance vs success threshold)
-- Random policy baseline performance
-- Current training progress (actor/critic losses, entropy)
-- Resource utilization predictions
+### 3. Monitor Training
 
-### Key Metrics to Watch
-- **Actor loss**: Should decrease over time (policy improving)
-- **Goal distance**: Should trend downward even if success_rate=0
-- **Entropy coefficient**: Controls exploration (0.1-1.0 is healthy early on)
-- **Buffer size**: Should fill up to capacity over first 100k-200k steps
+```bash
+# Launch TensorBoard
+tensorboard --logdir sb3/outputs
+
+# View training curves at http://localhost:6006
+```
+
+## Configuration
+
+All training parameters are in `sb3/configs/train_sb3.yaml`. Key optimized settings:
+
+### Core Parameters
+
+```yaml
+# Task and resources
+task: GauzeRetrieveRL-v0
+n_envs: 8
+device: cuda
+
+# Training
+total_timesteps: 1_000_000
+learning_starts: 10_000
+batch_size: 256
+buffer_size: 1_500_000
+
+# SAC hyperparameters (optimized for sparse rewards)
+learning_rate: 3e-4
+gamma: 0.95              # Lower for sparse rewards
+tau: 0.005               # Stable target updates
+gradient_steps: -1       # Sample efficient
+
+# Policy network
+policy_kwargs:
+  net_arch: [256, 256]   # Balanced capacity
+
+# HER configuration
+her:
+  strategy: 'future'     # Best for most tasks
+  n_sampled_goal: 6      # Virtual transitions per real one
+  handle_timeout_termination: true  # Critical for time limits
+
+# Normalization (critical for RL)
+normalize: true
+norm_obs: true
+norm_reward: false       # Never normalize sparse rewards!
+clip_obs: 200.0
+
+## HPC Cluster Usage
+
+### Submit Training Job
+
+```bash
+# Submit to SLURM
+sbatch sb3/hpc/train_sb3.sbatch
+
+# Check job status
+squeue -u $USER
+
+# Monitor training
+tail -f logs/surrol-sb3-<JOBID>.out
+
+# Check for errors
+tail -f logs/surrol-sb3-<JOBID>.err
+```
+
+### SLURM Configuration
+
+Edit `sb3/hpc/train_sb3.sbatch` to adjust resources:
+
+```bash
+#SBATCH --gres=gpu:1        # Number of GPUs
+#SBATCH --cpus-per-task=8   # CPU cores
+#SBATCH --mem=32G           # Memory
+#SBATCH --time=24:00:00     # Time limit
+```
+
+## Implementation Details
+
+### Custom TimeLimit Wrapper
+
+SB3's `check_env()` requires goal-based environments to expose `compute_reward()`. Gymnasium's TimeLimit wrapper doesn't forward this method, so we implemented a custom wrapper:
+
+```python
+class TimeLimitWithComputeReward(gymnasium.Wrapper):
+    """TimeLimit wrapper that forwards compute_reward for HER compatibility."""
+    
+    def compute_reward(self, achieved_goal, desired_goal, info):
+        # Recursively unwrap to find the base environment
+        env = self.env
+        while hasattr(env, 'env') and not hasattr(env, 'compute_reward'):
+            env = env.env
+        return env.compute_reward(achieved_goal, desired_goal, info)
+```
+
+This wrapper is automatically applied in `make_env()` to replace Gymnasium's default TimeLimit.
+
+## File Structure
+
+```
+xarel/
+├── README.md                          # This file
+├── sb3/
+│   ├── train_sb3.py                   # Main training script (with custom wrapper)
+│   ├── configs/
+│   │   └── train_sb3.yaml             # Optimized configuration
+│   ├── hpc/
+│   │   └── train_sb3.sbatch           # SLURM job script
+│   └── outputs/                       # Training outputs
+│       └── <task>/seed_<N>/
+│           ├── tensorboard/           # TensorBoard logs
+│           ├── checkpoints/           # Periodic saves (every 50k steps)
+│           ├── best_model/            # Best evaluation model
+│           ├── eval_logs/             # Evaluation metrics
+│           ├── final_model.zip        # Complete model
+│           └── final_policy.pth       # Policy-only (inference)
+├── SurRoL/                            # SurRoL surgical robotics
+│   └── surrol/
+│       ├── tasks/                     # Task implementations
+│       ├── robots/                    # PSM robot models
+│       └── gym/                       # Gymnasium wrappers
+└── logs/                              # SLURM logs
+    ├── surrol-sb3-<JOBID>.out
+    └── surrol-sb3-<JOBID>.err
+```
