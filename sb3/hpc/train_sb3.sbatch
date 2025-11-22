@@ -1,4 +1,9 @@
-#!/bin/bash
+#!/b#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=80G
+#SBATCH --time=03:00:00h
 #SBATCH --job-name=surrol-sb3
 #SBATCH -p cscc-gpu-p
 #SBATCH --qos=gpu-debug-qos
@@ -26,9 +31,9 @@ PROJECT_ROOT="/l/users/${USER}/xarel"
 cd "${PROJECT_ROOT}/sb3"
 mkdir -p "${PROJECT_ROOT}/logs"
 
-export OMP_NUM_THREADS=128
-export MKL_NUM_THREADS=128
-export NUMEXPR_NUM_THREADS=128
+export OMP_NUM_THREADS=8
+export MKL_NUM_THREADS=8
+export NUMEXPR_NUM_THREADS=8
 export HYDRA_FULL_ERROR=1
 export CUDA_LAUNCH_BLOCKING=0
 
