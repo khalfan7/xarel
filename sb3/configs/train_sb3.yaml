@@ -1,8 +1,6 @@
-# Stable-Baselines3 SAC+HER Training Configuration
-
 # Task and seed
 task: GauzeRetrieveRL-v0
-seed: 1
+seed: 42
 
 # Training parameters
 total_timesteps: 1_000_000  # Total training steps
@@ -17,38 +15,38 @@ buffer_size: 1_500_000
 batch_size: 512
 
 # SAC hyperparameters
-learning_rate: 3e-4  # 0.0003
-tau: 0.02  # Polyak averaging coefficient
-gamma: 0.98  # Discount factor
-train_freq: 1  # Update policy every N steps
-gradient_steps: 1  # Gradient steps per env step
-ent_coef: 'auto'  # Automatic entropy tuning
+learning_rate: 3e-4  
+tau: 0.02  
+gamma: 0.98  
+train_freq: 1  
+gradient_steps: 1  
+ent_coef: 'auto'  
 target_update_interval: 1
-target_entropy: 'auto'  # -dim(action_space)
-use_sde: false  # State-dependent exploration
+target_entropy: 'auto'  
+use_sde: false  
 
 # Policy network architecture
 policy_kwargs:
-  net_arch: [512, 512, 512]  # 3-layer network with 512 units each
+  net_arch: [512, 512, 512]  
 
 # HER parameters
 her:
   strategy: 'future'  # future, episode, random
-  n_sampled_goal: 4  # Number of virtual transitions per real transition
-  online_sampling: true  # Sample HER goals online (more efficient)
-  handle_timeout_termination: true  # Handle timeout terminations properly
+  n_sampled_goal: 4 
+  online_sampling: true 
+  handle_timeout_termination: true  
 
 # Environment normalization
-normalize: true  # Normalize observations
-norm_obs: true  # Normalize observations
-norm_reward: false  # Don't normalize rewards (sparse reward tasks)
-clip_obs: 200.0  # Clip normalized observations (common for Fetch tasks)
-clip_reward: 200.0  # Clip normalized rewards
+normalize: true  
+norm_obs: true 
+norm_reward: false  
+clip_obs: 200.0  
+clip_reward: 200.0  
 
 # Evaluation
-eval_freq: 10_000  # Evaluate every N steps
-n_eval_episodes: 20  # Episodes per evaluation
-save_freq: 20_000  # Save checkpoint every N steps
+eval_freq: 10_000  
+n_eval_episodes: 20  
+save_freq: 20_000  
 
 # Device
 device: cuda
