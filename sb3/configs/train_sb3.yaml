@@ -53,15 +53,6 @@ save_freq: 20_000  # Save checkpoint every N steps
 # Device
 device: cuda
 
-# Output structure (all consolidated under sb3/outputs/)
-# Structure: sb3/outputs/{task}/seed_{seed}/
-#   ├── checkpoints/       - Periodic model saves
-#   ├── best_model/        - Best performing model  
-#   ├── tensorboard/       - Training metrics
-#   ├── eval_logs/         - Evaluation results
-#   ├── final_model.zip    - Final trained model
-#   ├── vec_normalize.pkl  - Normalization statistics
-#   └── hydra/             - Hydra config files
 hydra:
   run:
     dir: ${hydra:runtime.cwd}/outputs/${task}/seed_${seed}/hydra

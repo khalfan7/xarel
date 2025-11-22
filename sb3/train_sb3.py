@@ -1,8 +1,3 @@
-"""
-Train SurRoL tasks using Stable-Baselines3 SAC+HER
-Memory-efficient alternative to custom implementation
-"""
-
 import os
 import sys
 import numpy as np
@@ -14,7 +9,6 @@ from omegaconf import DictConfig
 # Add SurRoL to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "SurRoL"))
 
-# Stable-Baselines3 imports
 from stable_baselines3 import SAC
 from stable_baselines3.her.her_replay_buffer import HerReplayBuffer
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
@@ -26,79 +20,18 @@ import surrol.gym
 
 
 def make_env(task_name, rank=0, seed=0):
-    """Create environment for SurRoL (now using gymnasium natively)"""
     def _init():
-        # SurRoL now uses gymnasium natively
         env = gymnasium.make(task_name, render_mode=None)
-        # Seed will be handled by reset(seed=...) in gymnasium API
         return env
     return _init
 
-
-def load_demonstrations(demo_path, env, n_demos=100):
-    """
-    Load demonstration data and add to replay buffer
-    Compatible with SB3 HER format
-    """
-    if not os.path.exists(demo_path):
-        print(f"Warning: Demo file not found: {demo_path}")
-        return None
-        
-    data = np.load(demo_path, allow_pickle=True)
-    
-    # Convert demo data to SB3 format
-    demo_buffer = []
-    
-    for i in range(min(n_demos, len(data['obs']))):
-        episode = {
-            'observations': data['obs'][i],
-            'actions': data['actions'][i],
-            'rewards': data['rewards'][i] if 'rewards' in data else None,
-            'next_observations': data['obs_next'][i] if 'obs_next' in data else data['obs'][i][1:],
-            'dones': data['dones'][i] if 'dones' in data else None,
-        }
-        
-        # Handle goal-based environments
-        if 'desired_goal' in data:
-            episode['desired_goal'] = data['desired_goal'][i]
-            episode['achieved_goal'] = data['achieved_goal'][i]
-            
-        demo_buffer.append(episode)
-    
-    print(f"Loaded {len(demo_buffer)} demonstration episodes")
-    return demo_buffer
-
-
 @hydra.main(version_base=None, config_path="./configs", config_name="train_sb3")
 def main(cfg: DictConfig):
-    """Main training loop using Stable-Baselines3"""
-    
-    print("="*60)
-    print(f"Training {cfg.task} with SB3 SAC+HER")
-    print(f"Seed: {cfg.seed}, Parallel Envs: {cfg.n_envs}")
-    print(f"Buffer Size: {cfg.buffer_size:,} (RAM efficient)")
-    print(f"Device: {cfg.device}")
-    print("="*60)
-    
-    # Consolidated output directory structure:
-    # sb3/outputs/{task}/seed_{seed}/
-    #   ├── checkpoints/       - Periodic model saves
-    #   ├── best_model/        - Best model during eval
-    #   ├── tensorboard/       - Training logs
-    #   ├── eval_logs/         - Evaluation results
-    #   ├── final_model.zip    - Final trained model
-    #   └── vec_normalize.pkl  - Normalization stats
-    
-    # Use absolute path to avoid Hydra changing working directory
     script_dir = Path(__file__).parent
     output_dir = script_dir / "outputs" / cfg.task / f"seed_{cfg.seed}"
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    print(f"Output directory: {output_dir}")
-    print(f"Working directory: {os.getcwd()}")
-    print("="*60)
-    
-    # Create vectorized environment with multiple parallel processes
+    # Create vectorized environment
     env = make_vec_env(
         make_env(cfg.task, seed=cfg.seed),
         n_envs=cfg.n_envs,
@@ -106,7 +39,7 @@ def main(cfg: DictConfig):
         seed=cfg.seed
     )
     
-    # Normalize observations (not rewards for sparse reward tasks)
+    # Normalize observations
     if cfg.normalize:
         env = VecNormalize(
             env,
@@ -116,7 +49,7 @@ def main(cfg: DictConfig):
             clip_reward=cfg.get('clip_reward', 10.0),
         )
     
-    # Create eval environment (single env for evaluation)
+    # Create eval environment
     eval_env = make_vec_env(
         make_env(cfg.task, seed=cfg.seed + 1000),
         n_envs=1,
@@ -135,16 +68,14 @@ def main(cfg: DictConfig):
     her_kwargs = dict(
         n_sampled_goal=cfg.her.n_sampled_goal,
         goal_selection_strategy=cfg.her.strategy,
-        # online_sampling removed in SB3 2.0+ (always online now)
         handle_timeout_termination=cfg.her.handle_timeout_termination,
     )
-    
-    # Policy network architecture
+
     policy_kwargs = dict(
         net_arch=list(cfg.policy_kwargs.net_arch)
     )
     
-    # SAC with HER (optimized for sparse rewards in goal-based environments)
+    # SAC + HER
     model = SAC(
         policy="MultiInputPolicy",
         env=env,
@@ -169,11 +100,6 @@ def main(cfg: DictConfig):
         seed=cfg.seed,
     )
     
-    print(f"\nModel created successfully!")
-    print(f"Policy network: {policy_kwargs['net_arch']}")
-    print(f"Action space: {env.action_space}")
-    print(f"Observation space keys: {env.observation_space.spaces.keys()}")
-
     # Callbacks
     callbacks = []
     
@@ -182,7 +108,7 @@ def main(cfg: DictConfig):
         save_freq=cfg.save_freq,
         save_path=str(output_dir / "checkpoints"),
         name_prefix="sac_her",
-        save_replay_buffer=False,  # Don't save buffer (too large)
+        save_replay_buffer=False, 
         save_vecnormalize=cfg.normalize,
     )
     callbacks.append(checkpoint_callback)
@@ -200,7 +126,6 @@ def main(cfg: DictConfig):
     callbacks.append(eval_callback)
     
     # Train the model
-    print(f"\nStarting training for {cfg.total_timesteps:,} steps...")
     model.learn(
         total_timesteps=cfg.total_timesteps,
         callback=callbacks,
@@ -213,22 +138,16 @@ def main(cfg: DictConfig):
     # Save final model
     final_model_path = output_dir / "final_model"
     model.save(str(final_model_path))
-    print(f"\nFinal model saved to {final_model_path}")
     
-    # Save normalization stats
+    # Save normalization stats before closing
     if cfg.normalize:
         vec_normalize_path = output_dir / "vec_normalize.pkl"
         env.save(str(vec_normalize_path))
-        print(f"Normalization stats saved to {vec_normalize_path}")
+        eval_env.save(str(output_dir / "vec_normalize_eval.pkl"))
     
     # Close environments
     env.close()
     eval_env.close()
-    
-    print("\n" + "="*60)
-    print("Training completed successfully!")
-    print(f"Results saved to: {output_dir}")
-    print("="*60)
 
 
 if __name__ == "__main__":
